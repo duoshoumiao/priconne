@@ -1,0 +1,43 @@
+import os
+import random
+
+import hoshino
+from hoshino import Service, aiorequests, priv, sucmd
+from hoshino.config import SUPERUSERS
+from hoshino.typing import CommandSession
+
+from . import chara
+
+sv = Service("pcr-data-updater", use_priv=priv.SU, manage_priv=priv.SU, visible=False)
+
+
+async def report_to_su(sess, msg_with_sess, msg_wo_sess):
+    # 仅保留会话内回复，移除私聊发送逻辑
+    if sess:
+        await sess.send(msg_with_sess)
+    # 注释/删除原本的私聊发送代码，不再主动私聊推送结果
+
+
+async def pull_chara(sess: CommandSession = None):
+    try:
+        rsp = await aiorequests.get('https://raw.githubusercontent.com/Ice9Coffee/LandosolRoster/master/_pcr_data.py', timeout=300)
+        rsp.raise_for_status()
+        # 修复点：rsp.text 是协程方法，需要加括号并 await
+        rsp_text = await rsp.text
+
+        filename = os.path.join(os.path.dirname(__file__), '_pcr_data.py')
+        with open(filename, 'w', encoding='utf8') as f:
+            f.write(rsp_text)  # 使用修复后的响应文本
+        result = chara.roster.update()
+
+    except Exception as e:
+        sv.logger.exception(e)
+        await report_to_su(sess, f'Error: {e}', f'pcr_data定时更新时遇到错误：\n{e}')
+        return
+
+    result = f"角色别称导入成功 {result['success']}，重名 {result['duplicate']}"
+    await report_to_su(sess, result, f'pcr_data定时更新：\n{result}')
+
+
+sucmd('update-pcr-chara', force_private=False, aliases=('重载花名册', '更新花名册'))(pull_chara)
+sv.scheduled_job('cron', hour=6, jitter=300)(pull_chara)
