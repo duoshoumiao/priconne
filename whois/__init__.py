@@ -1,5 +1,3 @@
-# 8060/HoshinoBot-master/hoshino/modules/priconne/whois/__init__.py  
-  
 from hoshino import Service  
 from hoshino.typing import HoshinoBot, CQEvent  
 from hoshino.util import FreqLimiter, filt_message  
